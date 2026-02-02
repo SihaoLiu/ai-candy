@@ -905,6 +905,7 @@ function _prompt_tool_status() {
   local CHECK="${GREEN}✓${RESET}"
   local CROSS="${RED}✗${RESET}"
   local WARN="${YELLOW}!${RESET}"
+  local QMARK="${YELLOW}?${RESET}"
 
   # Total box width (including borders)
   local WIDTH=78
@@ -930,6 +931,47 @@ function _prompt_tool_status() {
   echo ""
   echo "$TOP"
   _tsl "              Tool Availability Status"
+  echo "$MID"
+  _tsl "  ${CYAN}TOGGLE MODES${RESET} (use single letter to toggle)"
+  _tsl ""
+
+  # Emoji mode (e)
+  local ZWS=$'\u200b'  # Zero-width space: adds to strlen but not display width
+  if (( _PROMPT_EMOJI_MODE )); then
+    _tsl "    ${CHECK} e  Emoji mode      [✓] ${_NF_SSH}$_NF_CLAUDE ↑↓ ⚑"
+  else
+    _tsl "    ${CROSS} e  Plaintext mode  [OK] [SSH] Cl: +- S"
+  fi
+
+  # Path separator mode (p)
+  if (( _PROMPT_PATH_SEP_MODE )); then
+    _tsl "    ${CHECK} p  Space separator [repo submodule path]"
+  else
+    _tsl "    ${CROSS} p  Slash separator [repo/submodule/path]"
+  fi
+
+  # Network mode (n)
+  if (( _PROMPT_NETWORK_MODE )); then
+    _tsl "    ${CHECK} n  Network enabled (IP, GitHub, AI updates)"
+  else
+    _tsl "    ${CROSS} n  Network disabled"
+  fi
+
+  # AI tools display mode (a)
+  if (( _PROMPT_AI_MODE )); then
+    _tsl "    ${CHECK} a  AI tools display enabled"
+  else
+    _tsl "    ${CROSS} a  AI tools display hidden"
+  fi
+
+  # OS/kernel display mode (o)
+  if (( _PROMPT_OS_MODE )); then
+    _tsl "    ${CHECK} o  OS/kernel display enabled"
+  else
+    _tsl "    ${CROSS} o  OS/kernel display hidden"
+  fi
+
+  _tsl ""
   echo "$MID"
   _tsl "  ${CYAN}CORE TOOLS${RESET} (Performance & Caching)"
   _tsl ""
@@ -1026,38 +1068,6 @@ function _prompt_tool_status() {
 
   _tsl ""
   echo "$MID"
-  _tsl "  ${CYAN}AI CODING TOOLS${RESET} (Version display in prompt)"
-  _tsl ""
-
-  # Claude Code
-  if (( _HAS_CLAUDE )); then
-    local claude_ver=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
-    _tsl "    ${CHECK} claude      - Claude Code v${claude_ver:-?}"
-  else
-    _tsl "    ${CROSS} claude      - Not installed"
-    _tsl "                    Install: npm i -g @anthropic-ai/claude-code"
-  fi
-
-  # Codex
-  if (( _HAS_CODEX )); then
-    local codex_ver=$(codex --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
-    _tsl "    ${CHECK} codex       - OpenAI Codex v${codex_ver:-?}"
-  else
-    _tsl "    ${CROSS} codex       - Not installed"
-    _tsl "                    Install: npm i -g @openai/codex"
-  fi
-
-  # Gemini
-  if (( _HAS_GEMINI )); then
-    local gemini_ver=$(gemini --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
-    _tsl "    ${CHECK} gemini      - Google Gemini v${gemini_ver:-?}"
-  else
-    _tsl "    ${CROSS} gemini      - Not installed"
-    _tsl "                    Install: npm i -g @google/gemini-cli"
-  fi
-
-  _tsl ""
-  echo "$MID"
   _tsl "  ${CYAN}CACHE STATUS${RESET}"
   _tsl ""
   _tsl "    Cache directory: ${_CACHE_DIR}"
@@ -1074,43 +1084,40 @@ function _prompt_tool_status() {
 
   _tsl ""
   echo "$MID"
-  _tsl "  ${CYAN}TOGGLE MODES${RESET} (use single letter to toggle)"
+  _tsl "  ${CYAN}AI CODING TOOLS${RESET} (Version display in prompt)"
   _tsl ""
 
-  # Emoji mode (e)
-  local ZWS=$'\u200b'  # Zero-width space: adds to strlen but not display width
-  if (( _PROMPT_EMOJI_MODE )); then
-    _tsl "    ${CHECK} e  Emoji mode      [✓] ${_NF_SSH}$_NF_CLAUDE ↑↓ ⚑"
+  # Claude Code
+  if (( _HAS_CLAUDE )); then
+    local claude_ver=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+    _tsl "    ${CHECK} claude      - Claude Code v${claude_ver:-?}"
+  elif (( ! _PROMPT_NETWORK_MODE )); then
+    _tsl "    ${QMARK} claude      - Network disabled"
   else
-    _tsl "    ${CROSS} e  Plaintext mode  [OK] [SSH] Cl: +- S"
+    _tsl "    ${CROSS} claude      - Not installed"
+    _tsl "                    Install: npm i -g @anthropic-ai/claude-code"
   fi
 
-  # Path separator mode (p)
-  if (( _PROMPT_PATH_SEP_MODE )); then
-    _tsl "    ${CHECK} p  Space separator [repo submodule path]"
+  # Codex
+  if (( _HAS_CODEX )); then
+    local codex_ver=$(codex --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+    _tsl "    ${CHECK} codex       - OpenAI Codex v${codex_ver:-?}"
+  elif (( ! _PROMPT_NETWORK_MODE )); then
+    _tsl "    ${QMARK} codex       - Network disabled"
   else
-    _tsl "    ${CROSS} p  Slash separator [repo/submodule/path]"
+    _tsl "    ${CROSS} codex       - Not installed"
+    _tsl "                    Install: npm i -g @openai/codex"
   fi
 
-  # Network mode (n)
-  if (( _PROMPT_NETWORK_MODE )); then
-    _tsl "    ${CHECK} n  Network enabled (IP, GitHub, AI updates)"
+  # Gemini
+  if (( _HAS_GEMINI )); then
+    local gemini_ver=$(gemini --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+    _tsl "    ${CHECK} gemini      - Google Gemini v${gemini_ver:-?}"
+  elif (( ! _PROMPT_NETWORK_MODE )); then
+    _tsl "    ${QMARK} gemini      - Network disabled"
   else
-    _tsl "    ${CROSS} n  Network disabled"
-  fi
-
-  # AI tools display mode (a)
-  if (( _PROMPT_AI_MODE )); then
-    _tsl "    ${CHECK} a  AI tools display enabled"
-  else
-    _tsl "    ${CROSS} a  AI tools display hidden"
-  fi
-
-  # OS/kernel display mode (o)
-  if (( _PROMPT_OS_MODE )); then
-    _tsl "    ${CHECK} o  OS/kernel display enabled"
-  else
-    _tsl "    ${CROSS} o  OS/kernel display hidden"
+    _tsl "    ${CROSS} gemini      - Not installed"
+    _tsl "                    Install: npm i -g @google/gemini-cli"
   fi
 
   _tsl ""
