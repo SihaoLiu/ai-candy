@@ -2901,7 +2901,8 @@ function _count_ai_instances() {
     ps_grep)
       # Use ps + grep for complex patterns (for gemini)
       # Pattern like '^node .*/bin/gemini' counts only first process per instance
-      count=$(ps -eo args 2>/dev/null | grep -c "$pattern") || count=0
+      # Exclude --version processes (background version checks)
+      count=$(ps -eo args 2>/dev/null | grep "$pattern" | grep -vc -- '--version') || count=0
       ;;
   esac
 
