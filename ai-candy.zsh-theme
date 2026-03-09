@@ -2912,13 +2912,20 @@ function _count_ai_instances() {
   case "$method" in
     pgrep_exact)
       # Exact process name match (for claude, codex), current user only
-      count=$(pgrep -xc -u "$UID" "$pattern" 2>/dev/null) || count=0
+      # Use wc -l instead of -c flag (not available on macOS)
+      count=$(pgrep -x -u "$UID" "$pattern" 2>/dev/null | wc -l)
+      count=${count// /}
       ;;
     ps_grep)
       # Use ps + grep for complex patterns (for gemini), current user only
       # Pattern like '^node .*/bin/gemini' counts only first process per instance
       # Exclude --version processes (background version checks)
-      count=$(ps -u "$UID" -o args= 2>/dev/null | grep "$pattern" | grep -vc -- '--version') || count=0
+      # macOS ps uses -U for user filter; Linux uses -u
+      if [[ "$OSTYPE" == darwin* ]]; then
+        count=$(ps -U "$UID" -o args= 2>/dev/null | grep "$pattern" | grep -vc -- '--version') || count=0
+      else
+        count=$(ps -u "$UID" -o args= 2>/dev/null | grep "$pattern" | grep -vc -- '--version') || count=0
+      fi
       ;;
   esac
 
