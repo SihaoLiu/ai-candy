@@ -380,11 +380,25 @@ function _cache_get() {
     # SECURITY: Hex parameter binding prevents SQL injection
     # Use print -rn -- for safe string handling (handles - prefix and backslashes)
     # .parameter set only accepts literals, CAST must be in SQL statement
+    #
+    # FIX: Use hex(value) to preserve control characters in output.
+    # macOS sqlite3 CLI converts control chars (e.g. 0x1f) to caret notation
+    # (e.g. ^_) in text output, corrupting values like git hierarchy strings
+    # that use \x1f as internal separator. hex() output is decoded via xxd.
     local hex_key=$(print -rn -- "${cache_name}:${key}" | xxd -p | tr -d '\n')
-    echo ".timeout 1000
+    local raw_output
+    raw_output=$(echo ".timeout 1000
 .parameter init
 .parameter set @key X'${hex_key}'
-SELECT value || '|' || timestamp FROM cache WHERE key = CAST(@key AS TEXT) LIMIT 1;" | sqlite3 "$_CACHE_DB_FILE" 2>/dev/null
+SELECT hex(value) || '|' || timestamp FROM cache WHERE key = CAST(@key AS TEXT) LIMIT 1;" | sqlite3 "$_CACHE_DB_FILE" 2>/dev/null)
+    if [[ -n "$raw_output" ]]; then
+      # Parse: HEXVALUE|timestamp (hex chars [0-9A-F] never contain |)
+      local hex_val="${raw_output%%|*}"
+      local timestamp="${raw_output#*|}"
+      local value
+      value=$(print -rn -- "$hex_val" | xxd -r -p 2>/dev/null)
+      echo "${value}|${timestamp}"
+    fi
   else
     # Fallback to file cache (in secure cache directory)
     # File format is: key<SEP>value<SEP>timestamp (SEP = \x1f to avoid key containing |)
@@ -395,9 +409,11 @@ SELECT value || '|' || timestamp FROM cache WHERE key = CAST(@key AS TEXT) LIMIT
     local line=$(_cache_get_line_by_prefix "$cache_file" "$prefix")
     if [[ -n "$line" ]]; then
       # Parse: key<sep>value<sep>timestamp -> return value|timestamp
-      local rest="${line#*$sep}"      # Remove key<sep>
-      local value="${rest%%$sep*}"    # Get value (before second sep)
-      local timestamp="${rest#*$sep}" # Get timestamp (after second sep)
+      # FIX: Parse from the end since timestamp (numeric) never contains
+      # the separator, but the value might (e.g. git hierarchy uses \x1f).
+      local timestamp="${line##*$sep}"       # Last field (timestamp)
+      local key_value="${line%$sep*}"        # Everything before last separator
+      local value="${key_value#*$sep}"       # Value (after key separator)
       echo "${value}|${timestamp}"
     fi
   fi
