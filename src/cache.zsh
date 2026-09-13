@@ -307,6 +307,8 @@ function _ai_candy_hex_encode() {
   local -a input_bytes byte_codes
   REPLY=""
 
+  [[ -n "$input" ]] || return 0
+
   input_bytes=("${(@s::)input}")
   for byte in "${input_bytes[@]}"; do
     byte_codes+=($(( #byte )))

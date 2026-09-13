@@ -9,6 +9,36 @@ from tests.theme_test_support import ROOT, THEME, run_zsh
 
 
 class PromptRuntimeTest(unittest.TestCase):
+    def test_sysinfo_cache_preserves_missing_kernel_across_shells(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            uname = bin_dir / "uname"
+            uname.write_text("#!/bin/sh\nexit 1\n", encoding="ascii")
+            uname.chmod(0o755)
+            script = r"""
+source "$1"
+_AI_CANDY_PROMPT_OS_MODE=1
+_AI_CANDY_PROMPT_EMOJI_MODE=0
+_ai_candy_compute_sysinfo_direct
+print -r -- "LONG=<${_AI_CANDY_PP_SYSINFO_KERNEL_LONG}>"
+print -r -- "SHORT=<${_AI_CANDY_PP_SYSINFO_KERNEL_SHORT}>"
+"""
+            env = {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
+            cold = run_zsh(script, cache_home=root / "cache", env=env)
+            self.assertTrue((root / "cache" / "zsh-prompt" / "sysinfo_cache").is_file())
+            # A cache miss now produces a visible kernel, so empty output proves
+            # that the second shell loaded the persisted missing values.
+            uname.write_text(
+                "#!/bin/sh\nprintf '%s\\n' 'Linux 6.8.0-test'\n", encoding="ascii"
+            )
+            warm = run_zsh(script, cache_home=root / "cache", env=env)
+
+        for result in (cold, warm):
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertEqual("LONG=<>\nSHORT=<>\n", result.stdout)
+
     def test_layout_accounts_for_git_and_job_prefixes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = run_zsh(
